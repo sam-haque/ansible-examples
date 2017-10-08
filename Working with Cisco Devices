@@ -1,0 +1,164 @@
+This article will briefly discuss several Cisco device platforms that are supported by some of the Ansible's Network Modules. It will 
+illustrate hands-on approach on how to configure ansible to use these modules to connect to different Cisco platforms for
+automation. It will also provide some debugging technique on Cisco devies to ease troubleshooting connectivity issues between
+ansible and Cisco.
+
+Types of Cisco Devices & Platforms:
+Although Cisco manufactures many types of devices, the following discussions will be limited to only three of those types.
+1. Cisco Catalyst Switches & Routers (runs on IOS) - Use ansible Ios network module (ios_foobar) for these devices
+2. Cisco Nexus Datacenter Switches - (runs on NX-OS) - Use ansible Nxos network module (nxos_foobar) for these devices
+3. Cisco ASA Firewall/Security Appliances - runs on an OS similar to IOS but with extensive Firewall/security features -use
+    ansible Asa network module (asa_foobar) for these devices.
+The basic CLI interfaces to IOS, NX-OS and ASA platforms are almost similar except for some command syntax that are native to 
+the platforms.
+
+
+Cisco CLI (Command Line Interface)
+The Cisco devices mentioned above are predominantly managed by using CLI. However, once configured, the ASA devices can be managed via GUI.
+The CLI command structure is similar in all three types mentioned above, however, there are subtle differences on how the CLI behaves in these devices.
+The differences will be discussed in detail as we start to introduce the modules for each types of Cisco deives.
+
+Cisco CLI Primer (Based on Cisco IOS platforms)
+Cisco CLI has several modes of operation. Four of the important modes are discussed below:
+1. User EXEC mode
+2. Privileged EXEC mode
+3. Global Configuration mode
+4. Interface Configuration mode
+
+1. User EXEC mode
+When a Cisco switch/router is configured properly and someone is trying to access it via ssh, the switch will prompt the user
+for a 'username' and 'password'. After providing proper credentials, the switch/router will provide user a command prompt in a
+CLI user EXEC mode. The example of the prompt is shown below:
+Switch>   <<== 'Switch' represents the hostname of the device and the '>' indicates that the user is in user EXEC mode.
+
+Some commands shown below are allowed in user EXEC mode:
+Switch>?    <<== to view all the commands available in user EXEC mode
+Switch>who  <<== to view who is logged in
+Switch>sh inv (short for show inventory) <<== to view model#, HW revision and all other components installed in the device.
+Switch>sh ver (short for show version) <<== to view the version of the OS the device is running on
+
+Note: Ansible refers to this as non-privileged mode.
+
+Appropriate Ansible network module to use in this mode: ios_command
+
+
+2. Privileged EXEC mode
+There are limited things one can do in user EXEC mode. However, if there is a need to view the device configuration files, make 
+changes to the device or view directory then an elevation to the privilege level would be necessary. In a Cisco device from
+a user EXEC mode, type 'enable' and provide the appropriate password to elevate to privileged EXEC mode. This is similar to a
+root privilege after which no more privilege elevation would be required.
+Moving into privileged EXEC mode also reflects in the change in prompt as shown below:
+
+Switch#   <<== the '#' sign right after the hostname indicates that you are in privileged EXEC mode.
+
+Some commands shown below are allowed in privileged EXEC mode:
+Switch#?    <<== to view all the commands available in privileged EXEC mode
+Switch#sh run (short for show running-config) <<== to view device's current configuration running in the memory
+Switch#sh dir (short for show directory) <<== to view files in the device's flash drive
+Switch#debug ip ssh details <<== to view debugging information when users are loging in via ssh
+
+Note: Ansible refers to this as privileged mode.
+
+Appropriate Ansible network module to use in this mode: ios_command (with authorize parameter to elevate privilege)
+
+Ansible provides options/parameters called 'authorize' meaning allow elevation to privileged EXEC mode and 'auth_pass' meaning
+use this password for 'cisco enable password' to automate the process. More about these parameters and how to use them will
+be discussed shortly.
+
+3. Global Configuration mode
+Even though the privilege EXEC mode allows to do many tasks, such as, copy a file to/from the device, view config, however, 
+it does not allow other tasks, such as, add or remove a route, change hostname, create users, etc. For these tasks, no
+more privilege escalation is required except for changing into another CLI mode by entering the following command:
+
+Switch#conf t  <<== to move into global configuartion mode. One must be in privileged EXEC mode first to be able to get
+into this mode. Also, just type 'exit' to get back to privileged EXEC mode. Moving into privileged EXEC mode also reflects 
+in the change in prompt as shown below:
+
+Switch(config)#  <<== the 'config' indicates global configuration mode
+
+Some commands shown below are allowed in privileged EXEC mode:
+Switch(config)#hostname SW1 <<== change hostname of the switch from Switch to SW1
+Switch(config)#int l1 (short for interface loopback 1) <<== create an interface loopback 1 and prepare to configure the interface.
+Switch(config)#clock timezone <<== set the timezone the device is in
+Switch(config)#username jane password 0 austen <<== create a user called jane with password austen.
+
+Note: Ansible refers to this as configuration.
+
+Appropriate Ansible network module to use in this mode: ios_config
+
+
+4. Interface Configuration mode
+This is the most commonly used CLI mode in Cisco devices. This allows assigining an IP address, subnet mask, description 
+to an interface if the interface is used as a router port. In case of a switch port, a vlan, port security, etc.
+can be assigned here. To get into this mode, type the following command to configure an interface.
+
+Switch(config)#int g1/0/1 (short for interface GigabitEthernet1/0/1) <<== get into interface configuration mode and configure this interface
+
+Moving into Interface Configuration mode also reflects in the change in prompt as shown below:
+Switch(config-if)#  <<== the 'config-if' indicates interface configuration mode
+
+Some commands shown below can be used to configure the f1/0/1 interface:
+Switch(config-if)#description fanny price <<== name of the person connected to this port
+Switch(config-if)#sw mode access (short for switchport mode access) <<== set the switchport to access
+Switch(config-if)#sw all vlan 55 (short for switchport allowed vlan 55) <<== make this port part of vlan 55
+
+
+Note: Ansible refers to this as interface configuration.
+
+Appropriate Ansible network module to use in this mode: ios_interface
+
+
+ANSIBLE NETWORK MODULES for CISCO DEVICES
+
+It is important to make a few important observations when using Cisco's IOS, NX-OS or ASA platforms. 
+* IOS is the most matured and widespread but lacks support for API. 
+* ASA devices also use IOS based OS but integrated with firewall and other security features which is more complex to manage. 
+* NS-OX platform, on the other hand, is Linux based and supports API. This makes automation easier.
+
+
+MODULES FOR DIFFERENT CLI MODES
+ios_command Module
+For automating commands that are part of CLI user EXEC mode or privileged EXEC mode, it is best to use ios_command module. List all the
+commands to be executed under 'commands'. If a command is part of privileged EXEC mode, then 'authorize' and 'auth_pass'
+have to be incorporated.
+
+ios_config Module
+For automating commands that are part of CLI Global Configuration mode of Interface Confiruation mode, it is best 
+to use ios_config module. List all the commands to be executed under 'lines'. Notice, it is 'lines' and not 'commands' 
+as in ios_command module. Also, 'authorize' and 'auth_pass' have to be incorporated since all commands in this mode 
+require entry to privileged EXEC mode first. The beauty of ios_config is that it will automatically get into 
+Global Configuration mode and execute needed commands and also gracefully exit the mode once done with executing them. 
+This behavior of ios_config module automatically produces an event in Cisco devices which can be help in debugging. 
+More about this will be discussed in debugging section.
+
+ios_interface Module
+For automating interface related commands, such as, to check up/down status, other characteristics, add/remove an loopback 
+interfaces, it is best to use this module
+
+
+COMMANDS for DEBUGGING
+
+Cisco IOS Devices
+ clear loggin
+ term mon
+ debut ip ssh details
+ 
+Ansible Control Machine
+ ansible-playbook foobar.yml -vvv
+
+
+
+
+
+
+ACRONYMS:
+CLI - Command Line Interface, an interface for executing commands only. No GUI allowed.
+IOS - Internetwork Operation System, a Cisco proprietary OS that runs on mostly Cisco Catalyst switches and ISR routers, ie, Catalyst 4506, 6509, 9407R, etc.
+NX-OS - A Cisco OS which is built on Linux/UNIX platform that runs on Cisco Nexus datacenter switches, ie, Nexus 3K, 7K or 9K, etc.
+ASA - Adaptive Security Appliance are Cisco firewall/security devices. These devices run an OS similar to IOS but with extensive
+features for firewall, IDS, IPS, etc. Common devices are ASA 5500, ASA 5500-X, etc.
+Firepower - Is Cisco's next generation firewall (NGFW), runs on customized Linux/UNIX platform. ASA and the new Firepower devices
+are completely different although Firepower software features are available as a pluggable module on some ASA devices.
+
+
+
